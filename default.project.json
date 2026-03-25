@@ -3,42 +3,22 @@
   "tree": {
     "$className": "DataModel",
 
-    "Workspace": {
-      "$ignoreUnknown": true,
-      "Grassland": {
-        "$path": "assets/Grassland.rbxm"
-      }
-    },
-
     "ReplicatedStorage": {
-      "Shared": {
-        "$path": "src/shared"
-      }
-    },
-
-    "ServerStorage": {
-      "$ignoreUnknown": true,
-      "Mobs": {
-        "$className": "Folder",
-        "Rig": {
-          "$path": "assets/Mobs/Rig.rbxm"
-        }
-      }
+      "Shared": { "$path": "src/shared" }
     },
 
     "ServerScriptService": {
-      "$ignoreUnknown": true,
-      "Main": {
-        "$path": "src/server/Main"
-      }
+      "Main": { "$path": "src/server" }
     },
 
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "Client": {
-          "$path": "src/client"
-        }
+        "Client": { "$path": "src/client" }
       }
+    },
+
+    "StarterGui": {
+      "Gui": { "$path": "src/gui" }
     }
   }
 }
