@@ -1,3 +1,8 @@
+local ServerStorage = game:GetService("ServerStorage")
+
+local bindables = ServerStorage:WaitForChild("Bindables")
+local updateBaseHealth = bindables:WaitForChild("UpdateBaseHealth")	
+
 local PhysicsService = game:GetService("PhysicsService")
 local ServerStorage = game:GetService("ServerStorage")
 local mob = {} --mob module
@@ -37,6 +42,8 @@ function mob.move(mob, map) --move mob to next waypoint
 	end
 	
 	mob:Destroy()
+	
+	updateBaseHealth:Fire(humanoid.Health) 
 end
 
 function mob.Spawn(name, quantity, map) --spawn mob

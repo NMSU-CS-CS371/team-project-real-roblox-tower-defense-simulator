@@ -9,6 +9,7 @@ local spawnTowerEvent = events:WaitForChild("SpawnTower")
 
 local towerToSpawn = nil
 local canPlace = false
+local rotation = 0
 
 local camera = workspace.CurrentCamera
 local item= nil
@@ -33,6 +34,7 @@ local function RemovePlaceholderTower()
 	if towerToSpawn then
 		towerToSpawn:Destroy()
 		towerToSpawn = nil
+		rotation = 0
 	end
 end
 
@@ -40,7 +42,7 @@ local function AddPlaceholderTower(name)
 	local towerExists = towers:FindFirstChild(name)
 	if towerExists then
 		towerToSpawn = towerExists:Clone()
-		towerToSpawn.Parent = workspace.Towers
+		towerToSpawn.Parent = workspace
 		
 		for i, object in ipairs(towerToSpawn:GetDescendants()) do
 			if object:IsA("BasePart") then
@@ -59,9 +61,18 @@ local function ColorPlaceHolderTower(color)
 	end
 end
 	
-gui.Spawn.Activated:Connect(function()
-	AddPlaceholderTower("Turret")
-end)
+for i, tower in pairs(towers:GetChildren()) do
+	local button = gui.Towers.Template:Clone()
+	local config = tower:WaitForChild("Config")
+	button.Name = tower.Name
+	button.Image = config.Image.Texture
+	button.Visible = true
+	button.Parent = gui.Towers
+	
+	button.Activated:Connect(function()
+		AddPlaceholderTower(tower.Name)
+	end)
+end
 	
 	userInputService.InputBegan:Connect(function(input, processed)
 		if processed then
@@ -70,8 +81,12 @@ end)
 		
 		if towerToSpawn then
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
-				spawnTowerEvent:FireServer(towerToSpawn.Name, towerToSpawn:GetPivot())
-				RemovePlaceholderTower()
+				if canPlace then
+					spawnTowerEvent:FireServer(towerToSpawn.Name, towerToSpawn:GetPivot())
+					RemovePlaceholderTower()
+				end
+			elseif input.KeyCode == Enum.KeyCode.R then
+				rotation += 90
 			end
 		end
 	end)
@@ -103,7 +118,7 @@ runService.RenderStepped:Connect(function()
 				y = y + (pp.Size.Y / 2) - pivotToPPCenter
 			end
 			
-			local cFrame = CFrame.new(x,y,z)
+			local cFrame = CFrame.new(x,y,z) * CFrame.Angles(0, math.rad(rotation), 0)
 			towerToSpawn:PivotTo(cFrame)
 		end
 	end
