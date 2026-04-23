@@ -2,9 +2,13 @@ local PhysicsService = game:GetService("PhysicsService")
 local ServerStorage = game:GetService("ServerStorage")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local events = replicatedStorage:WaitForChild("Events")
-local spawnTowerEvent = events:WaitForChild("SpawnTower")
 local animateTowerEvent = events:WaitForChild("AnimateTower")
+local functions = replicatedStorage:WaitForChild("Functions")
+local spawnTowerFunction = functions:WaitForChild("SpawnTower")
+local requestTowerFunction = functions:WaitForChild("RequestTower")
+local sellTowerFunction = functions:WaitForChild("SellTower")
 
+local maxTowers = 10
 local tower = {}--tower module
 
 function FindNearestTarget(newTower, range)
@@ -13,7 +17,6 @@ function FindNearestTarget(newTower, range)
 
 	for i, target in ipairs(workspace.Mobs:GetChildren()) do
 		local distance = (target.HumanoidRootPart.Position - newTower.HumanoidRootPart.Position).Magnitude
-		print(target.Name, distance)
 		if distance < range then
 			print(target.Name, "is the nearest target found so far")
 			nearestTarget = target
@@ -24,7 +27,7 @@ function FindNearestTarget(newTower, range)
 	return nearestTarget
 end
 
-function tower.Attack(newTower)
+function tower.Attack(newTower, player)
 	local config = newTower.Config
 	local target = FindNearestTarget(newTower, config.Range.Value)
 	if target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 then
@@ -34,22 +37,57 @@ function tower.Attack(newTower)
 		
 		animateTowerEvent:FireAllClients(newTower, "Shoot")
 		target.Humanoid:TakeDamage(config.Damage.Value)
+		
+		if target.Humanoid.Health <= 0 then
+			player.Gold.Value += target.Humanoid.MaxHealth
+		end
+		
 		task.wait(config.Cooldown.Value)
 	end
 	
 	task.wait(0.1)
 	
-	tower.Attack(newTower)
+	if newTower and newTower.Parent then
+		tower.Attack(newTower, player)
+	end
 end
 
-function tower.Spawn(player, name, cFrame)--spawn tower
-	local towerExists = replicatedStorage.Towers:FindFirstChild(name)
+function tower.Sell(player, model)
+	if model and model:FindFirstChild("Config") then
+		if model.Config.Owner.Value == player.Name then
+			player.PlacedTowers.Value -= 1
+			player.Gold.Value += model.Config.Cost.Value / 1.5
+			model:Destroy()
+			return true
+		end
+	end
 	
-	if towerExists then
+	warn("Unable to sell this tower")
+	return false
+end
+sellTowerFunction.OnServerInvoke = tower.Sell
+
+function tower.Spawn(player, name, cFrame, previous)--spawn tower
+	local allowedToSpawn = tower.CheckSpawn(player, name)
+	
+	if allowedToSpawn then
+		
+		local newTower
+		if previous then
+			previous:Destroy()
+			newTower = replicatedStorage.Towers.Upgrades[name]:Clone()
+		else
+			newTower = replicatedStorage.Towers[name]:Clone()
+			player.PlacedTowers.Value += 1
+		end
+		
+		local ownerValue = Instance.new("StringValue")
+		ownerValue.Name = "Owner"
+		ownerValue.Value = player.Name
+		ownerValue.Parent = newTower.Config
 		
 		--move into workspace
-			local newTower = towerExists:Clone()
-			newTower.Parent = workspace.Towers
+		newTower.Parent = workspace.Towers
 			
 			-- Position the tower using PivotTo (works for models with or without HumanoidRootPart)
 			newTower:PivotTo(cFrame)
@@ -71,14 +109,40 @@ function tower.Spawn(player, name, cFrame)--spawn tower
 
 				end	
 			end
+			
+			player.Gold.Value -= newTower.Config.Cost.Value
 		
-		coroutine.wrap(tower.Attack)(newTower)
+		coroutine.wrap(tower.Attack)(newTower, player)
+		
+		return newTower
 	else
 		warn("Tower does not exist", name)
+		return false
 	end
 	
 end
 
-spawnTowerEvent.OnServerEvent:Connect(tower.Spawn)
 
+spawnTowerFunction.OnServerInvoke = tower.Spawn
+
+function tower.CheckSpawn(player, name)
+	local towerExists = replicatedStorage.Towers:FindFirstChild(name, true)
+
+	if towerExists then
+		if towerExists.Config.Cost.Value <= player.Gold.Value then
+			if player.PlacedTowers.Value < maxTowers then
+				return true
+			else
+				warn("Player has reached max tower limit")
+			end
+		else
+			warn("Player cannot afford")
+		end
+	else
+		warn("Tower does not exist")
+	end
+	
+	return false
+end
+requestTowerFunction.OnServerInvoke = tower.CheckSpawn
 return tower

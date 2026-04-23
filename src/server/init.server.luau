@@ -3,24 +3,32 @@ local ServerStorage = game:GetService("ServerStorage")
 local bindables = ServerStorage:WaitForChild("Bindables")
 local gameOverEvent = bindables:WaitForChild("GameOver")
 
-local base = require(script.Base)
 local tower = require(script.Tower)
 local mob = require(script.Mob)
 local map = workspace.Grassland
 
+local info = workspace.Info
 local gameOver = false
 
-gameOverEvent.Event:Connect(function()
-	gameOver = true
+map.Base.Humanoid.HealthChanged:Connect(function(health)
+	if health <= 0 then
+		gameOver = true
+	end
 end)
 
-base.Setup(map, 500)
+
+for i = 3, 0, -1 do
+	info.Message.Value = "Game starting in... " .. i
+	task.wait(1)
+end
 
 
 
 --SPAWN IN MOBS TO START WAVES
 for wave=1, 5 do
-	print("WAVE STARTING", wave)
+	info.Wave.Value = wave
+	info.Message.Value = ""
+	
 	if wave < 5 then
 		mob.Spawn("Metal", 2*wave, map)
 		mob.Spawn("Ice", 3*wave, map)
@@ -34,10 +42,12 @@ for wave=1, 5 do
 	until	#workspace.Mobs:GetChildren() == 0 or gameOver
 	
 	if gameOver then
-		print("GAME OVER")
+		info.Message.Value = "Game Over"
 		break
 	end
 	
-	print("WAVE ENDED")
-	task.wait(1)
+	for i = 5, 0, -1 do
+		info.Message.Value = "Next wave starting in... " .. i
+		task.wait(1)
+	end
 end
