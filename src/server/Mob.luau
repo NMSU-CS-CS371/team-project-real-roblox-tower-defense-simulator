@@ -1,7 +1,6 @@
 local ServerStorage = game:GetService("ServerStorage")
 
 local PhysicsService = game:GetService("PhysicsService")
-local ServerStorage = game:GetService("ServerStorage")
 local mob = {} --mob module
 
 function mob.move(mob, map) --move mob to next waypoint
@@ -10,6 +9,7 @@ function mob.move(mob, map) --move mob to next waypoint
 	
 	--MOVE MOBS TO WAYPOINT AND ONCE FINISHED DESTROY
 	for waypoint = 1, #waypoints:GetChildren() do
+		mob.MovingTo.Value = waypoint
 		local targetPosition = waypoints[waypoint].Position
 		local maxRetries = 3
 		local reached = false
@@ -36,12 +36,16 @@ function mob.move(mob, map) --move mob to next waypoint
 				hrp.CFrame = CFrame.new(targetPosition)
 			end
 		end
+		end
+		
+		-- Damage the base BEFORE destroying the mob
+		local baseHumanoid = map.Base:FindFirstChild("Humanoid")
+		if baseHumanoid and baseHumanoid.Health > 0 then
+			baseHumanoid:TakeDamage(humanoid.MaxHealth)
+		end
+		
+		mob:Destroy()
 	end
-	
-	mob:Destroy()
-	
-	map.Base.Humanoid:TakeDamage(humanoid.Health)
-end
 
 function mob.Spawn(name, quantity, map) --spawn mob
 	local mobExists = ServerStorage.Mobs:FindFirstChild(name)
@@ -54,6 +58,10 @@ function mob.Spawn(name, quantity, map) --spawn mob
 			newMob.HumanoidRootPart.CFrame = map.Start.CFrame
 			newMob.Parent = workspace.Mobs
 			newMob.HumanoidRootPart:SetNetworkOwner(nil)
+			
+			local movingTo = Instance.new("IntValue")
+			movingTo.Name = "MovingTo"
+			movingTo.Parent = newMob
 			
 			--set collision group
 			for i, object in ipairs(newMob:GetDescendants()) do

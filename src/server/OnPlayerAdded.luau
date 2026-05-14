@@ -8,6 +8,10 @@ Players.PlayerAdded:Connect(function(player)
 	gold.Value = 1000
 	gold.Parent = player
 	
+	local kills = Instance.new("IntValue")
+	kills.Name = "Kills"
+	kills.Parent = player
+	
 	local placedTowers = Instance.new("IntValue")
 	placedTowers.Name = "PlacedTowers"
 	placedTowers.Value = 0

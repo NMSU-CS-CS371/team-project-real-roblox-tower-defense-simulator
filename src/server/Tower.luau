@@ -1,5 +1,4 @@
 local PhysicsService = game:GetService("PhysicsService")
-local ServerStorage = game:GetService("ServerStorage")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local events = replicatedStorage:WaitForChild("Events")
 local animateTowerEvent = events:WaitForChild("AnimateTower")
@@ -7,39 +6,82 @@ local functions = replicatedStorage:WaitForChild("Functions")
 local spawnTowerFunction = functions:WaitForChild("SpawnTower")
 local requestTowerFunction = functions:WaitForChild("RequestTower")
 local sellTowerFunction = functions:WaitForChild("SellTower")
+local changeModeFunction = functions:WaitForChild("ChangeTowerMode")
 
 local maxTowers = 10
 local tower = {}--tower module
 
-function FindNearestTarget(newTower, range)
-	
-	local nearestTarget = nil
 
-	for i, target in ipairs(workspace.Mobs:GetChildren()) do
-		local distance = (target.HumanoidRootPart.Position - newTower.HumanoidRootPart.Position).Magnitude
-		if distance < range then
-			print(target.Name, "is the nearest target found so far")
-			nearestTarget = target
-			range = distance
+function tower.FindTarget(newTower, range, mode)
+	local bestTarget = nil
+	local bestWaypoint = nil
+	local bestDistance = nil
+	local bestHealth = nil
+	local map = workspace.Map:FindFirstChildOfClass("Folder")
+	
+	for i, mob in ipairs(workspace.Mobs:GetChildren()) do
+		local distanceToMob = (mob.HumanoidRootPart.Position - newTower.HumanoidRootPart.Position).Magnitude
+		local distanceToWaypoint = (mob.HumanoidRootPart.Position - map.Waypoints[mob.MovingTo.Value].Position).Magnitude
+		
+		if distanceToMob <= range then
+			if mode == "Near" then
+				range = distanceToMob
+				bestTarget = mob
+				
+			elseif mode == "First" then
+				if not bestWaypoint or mob.MovingTo.Value >= bestWaypoint then
+					
+					bestWaypoint = mob.MovingTo.Value
+					
+					if not bestDistance or distanceToWaypoint < bestDistance then
+						bestDistance = distanceToWaypoint
+						bestTarget = mob
+					end
+				end
+				
+			elseif mode == "Last" then
+				if not bestWaypoint or mob.MovingTo.Value <= bestWaypoint then
+					
+					bestWaypoint = mob.MovingTo.Value
+
+					if not bestDistance or distanceToWaypoint > bestDistance then
+						bestDistance = distanceToWaypoint
+						bestTarget = mob
+					end
+				end
+				
+			elseif mode == "Strong" then
+				if not bestHealth or mob.Humanoid.Health > bestHealth then
+					bestHealth = mob.Humanoid.Health
+					bestTarget = mob
+				end
+			
+			elseif mode == "Weak" then
+				if not bestHealth or mob.Humanoid.Health < bestHealth then
+					bestHealth = mob.Humanoid.Health
+					bestTarget = mob
+				end
+			end
 		end
 	end
-
-	return nearestTarget
+	
+	return bestTarget
 end
 
 function tower.Attack(newTower, player)
 	local config = newTower.Config
-	local target = FindNearestTarget(newTower, config.Range.Value)
+	local target = tower.FindTarget(newTower, config.Range.Value, config.TargetMode.Value)
 	if target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 then
 		
 		local targetCFrame = CFrame.lookAt(newTower.HumanoidRootPart.Position, Vector3.new(target.HumanoidRootPart.Position.X, newTower.HumanoidRootPart.Position.Y, target.HumanoidRootPart.Position.Z))
 		newTower.HumanoidRootPart.CFrame = targetCFrame
 		
-		animateTowerEvent:FireAllClients(newTower, "Shoot")
+		animateTowerEvent:FireAllClients(newTower, "Shoot", target)
 		target.Humanoid:TakeDamage(config.Damage.Value)
 		
 		if target.Humanoid.Health <= 0 then
 			player.Gold.Value += target.Humanoid.MaxHealth
+			player.Kills.Value += 1
 		end
 		
 		task.wait(config.Cooldown.Value)
@@ -51,6 +93,27 @@ function tower.Attack(newTower, player)
 		tower.Attack(newTower, player)
 	end
 end
+
+function tower.ChangeMode(player, model)
+	if model and model:FindFirstChild("Config") then
+		local targetMode = model.Config.TargetMode
+		local modes = {"First", "Last", "Near", "Strong", "Weak"}
+		local modeIndex = table.find(modes, targetMode.Value)
+		
+		if modeIndex < #modes then
+			targetMode.Value = modes[modeIndex + 1]
+		else
+			targetMode.Value = modes[1]
+		end
+		
+		return true
+	else
+		warn("Unable to change tower mode")
+		return false
+	end
+end
+
+changeModeFunction.OnServerInvoke = tower.ChangeMode
 
 function tower.Sell(player, model)
 	if model and model:FindFirstChild("Config") then
@@ -68,12 +131,16 @@ end
 sellTowerFunction.OnServerInvoke = tower.Sell
 
 function tower.Spawn(player, name, cFrame, previous)--spawn tower
-	local allowedToSpawn = tower.CheckSpawn(player, name)
+	local allowedToSpawn = tower.CheckSpawn(player, name, previous)
 	
 	if allowedToSpawn then
 		
 		local newTower
+		local oldMode = nil
+		
 		if previous then
+			oldMode = previous.Config.TargetMode.Value
+
 			previous:Destroy()
 			newTower = replicatedStorage.Towers.Upgrades[name]:Clone()
 		else
@@ -85,6 +152,14 @@ function tower.Spawn(player, name, cFrame, previous)--spawn tower
 		ownerValue.Name = "Owner"
 		ownerValue.Value = player.Name
 		ownerValue.Parent = newTower.Config
+		
+		local targetMode = Instance.new("StringValue")
+		targetMode.Name = "TargetMode"
+		
+	
+		targetMode.Value = oldMode or "First"
+		
+		targetMode.Parent = newTower.Config
 		
 		--move into workspace
 		newTower.Parent = workspace.Towers
@@ -125,12 +200,12 @@ end
 
 spawnTowerFunction.OnServerInvoke = tower.Spawn
 
-function tower.CheckSpawn(player, name)
+function tower.CheckSpawn(player, name, previous)
 	local towerExists = replicatedStorage.Towers:FindFirstChild(name, true)
 
 	if towerExists then
 		if towerExists.Config.Cost.Value <= player.Gold.Value then
-			if player.PlacedTowers.Value < maxTowers then
+			if previous or player.PlacedTowers.Value < maxTowers then
 				return true
 			else
 				warn("Player has reached max tower limit")
